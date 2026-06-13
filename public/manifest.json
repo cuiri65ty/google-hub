@@ -1,0 +1,22 @@
+{
+  "name": "Tizen TV Google Hub",
+  "short_name": "Tizen Hub",
+  "description": "Smart full-screen Google TV Hub for Samsung Tizen OS",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#020617",
+  "theme_color": "#3b82f6",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/src/assets/images/tizen_tv_google_hub_logo_1781366318913.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/src/assets/images/tizen_tv_google_hub_logo_1781366318913.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

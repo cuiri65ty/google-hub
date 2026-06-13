@@ -1,0 +1,8 @@
+{
+  "name": "Tizen TV Google Hub",
+  "description": "A lightweight full-screen Smart TV Progressive Web App with Google Hub widgets, spatial keyboard navigation, and Gemini AI Q&A.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

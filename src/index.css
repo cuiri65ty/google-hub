@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Base custom definitions for Tizen Smart TV */
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: #0F0F0F; /* Matte Black Base */
+    color: #F1F1F1; /* Clean high-contrast white */
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Prevent browser selection highlighting */
+  * {
+    user-select: none;
+    -webkit-user-select: none;
+    outline: none;
+  }
+
+  /* Hide mouse cursor by default to emulate YouTube TV experience */
+  body.cursor-hidden, body.cursor-hidden * {
+    cursor: none !important;
+  }
+
+  /* Custom hidden scrollbar to prevent ugly TV browser scrollbars */
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
+}
+
+/* Animations and keyframes */
+@keyframes tvGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(255, 255, 255, 0.4), 0 0 5px rgba(255, 255, 255, 0.1);
+  }
+}
+
+.animate-tv-glow {
+  animation: tvGlow 2.5s infinite ease-in-out;
+}
