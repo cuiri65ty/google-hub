@@ -150,6 +150,17 @@ export function useTvNavigation(
       const activeEl = document.activeElement;
       const isTyping = activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
 
+      if (isTyping) {
+        // Allow text cursor navigation inside the input box normally.
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          return;
+        }
+        // Exit typing focus cleanly if moving vertically out of the text field.
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          (activeEl as HTMLElement).blur();
+        }
+      }
+
       // Handle Tizen & general key codes
       switch (e.key) {
         case "ArrowUp":
@@ -161,7 +172,6 @@ export function useTvNavigation(
           moveFocus("DOWN");
           break;
         case "ArrowLeft":
-          // If typing in search box, only navigate left if cursor is at the beginning, but on smart TV remote arrows change fields:
           e.preventDefault();
           moveFocus("LEFT");
           break;

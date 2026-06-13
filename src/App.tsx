@@ -1,340 +1,299 @@
 import { useState, useEffect } from "react";
-import { useTvNavigation } from "./hooks/useTvNavigation";
-import { Sidebar } from "./components/Sidebar";
-import { HomeView } from "./components/HomeView";
-import { AssistantView } from "./components/AssistantView";
-import { YoutubeView } from "./components/YoutubeView";
-import { NewsView } from "./components/NewsView";
-import { SettingsView } from "./components/SettingsView";
-import { FocusItem, PageType, YoutubeVideo, SearchResult } from "./types";
-import { Youtube, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CornerDownLeft, ArrowLeft, Maximize2, Sparkles, Tv } from "lucide-react";
+import { Maximize2, Eye, EyeOff, Tv, Shield, Monitor, Key, Sparkles, RefreshCw, HelpCircle } from "lucide-react";
 
 export default function App() {
-  const [activePage, setActivePage] = useState<PageType>("home");
-  const [viewRegisteredItems, setViewRegisteredItems] = useState<FocusItem[]>([]);
+  const [focusedIndex, setFocusedIndex] = useState<number>(0); // 0: Fullscreen, 1: Cursor occlusion
   const [cursorHidden, setCursorHidden] = useState<boolean>(true);
-  const [showVirtualRemote, setShowVirtualRemote] = useState<boolean>(true);
-  const [videoPlayerOpen, setVideoPlayerOpen] = useState<boolean>(false);
-  const [activeVideo, setActiveVideo] = useState<YoutubeVideo | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [lastKeyPressed, setLastKeyPressed] = useState<string>("هیچ کلیدی روی ریموت کنترل افشانده نشده است");
 
-  // Directly forward query from Home Shortcuts to Assistant View
-  const [directQuery, setDirectQuery] = useState<string | undefined>(undefined);
+  // Track browser window fullscreen state dynamically
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
 
-  // Permanent sidebar focus items
-  const permanentSidebarItems: FocusItem[] = [
-    { id: "sidebar-home", section: "sidebar", row: 0, col: 0, label: "Home", actionType: "navigate", actionData: "home" },
-    { id: "sidebar-assistant", section: "sidebar", row: 1, col: 0, label: "Google AI", actionType: "navigate", actionData: "assistant" },
-    { id: "sidebar-youtube", section: "sidebar", row: 2, col: 0, label: "YouTube TV", actionType: "navigate", actionData: "youtube" },
-    { id: "sidebar-news", section: "sidebar", row: 3, col: 0, label: "Google News", actionType: "navigate", actionData: "news" },
-    { id: "sidebar-settings", section: "sidebar", row: 4, col: 0, label: "Settings", actionType: "navigate", actionData: "settings" },
-  ];
-
-  // Active list of all focusable targets on viewport screen
-  let focusList: FocusItem[] = [];
-  if (videoPlayerOpen) {
-    focusList = [{ id: "player-close-btn", section: "main", row: 0, col: 0, label: "Close player", actionType: "action" }];
-  } else {
-    focusList = [...permanentSidebarItems, ...viewRegisteredItems];
-  }
-
-  // Handle media player closing
-  const closePlayer = () => {
-    setVideoPlayerOpen(false);
-    setActiveVideo(null);
-    // Return focus cleanly to the active video card/trigger
-    if (activePage === "home") {
-      setFocusedId("main-video-0");
-    } else if (activePage === "youtube") {
-      setFocusedId("yt-video-0");
-    } else if (activePage === "assistant") {
-      setFocusedId("ast-video-0");
-    }
-  };
-
-  // Central trigger router for spatial navigation clicks on non-standard actions
-  const handleExecuteAction = (item: FocusItem) => {
-    if (item.actionType === "play") {
-      setActiveVideo(item.actionData);
-      setVideoPlayerOpen(true);
-      setFocusedId("player-close-btn");
-    } else if (item.actionType === "action" && item.id === "player-close-btn") {
-      closePlayer();
-    }
-  };
-
-  // Initialize helper navigation hook
-  const {
-    currentFocusId,
-    setFocusedId,
-    moveFocus,
-    triggerEnter,
-    triggerBack
-  } = useTvNavigation(
-    activePage,
-    setActivePage,
-    focusList,
-    handleExecuteAction,
-    videoPlayerOpen,
-    closePlayer
-  );
-
-  // Monitor cursor hidden status changes
+  // Force fully hide native cursor and block default pointer interactions
   useEffect(() => {
     if (cursorHidden) {
-      document.body.classList.add("cursor-hidden");
+      document.body.style.cursor = "none";
+      const style = document.createElement("style");
+      style.id = "tizen-cursor-occlusion-payload";
+      style.innerHTML = `
+        * {
+          cursor: none !important;
+        }
+        button:hover {
+          /* Prevent cursor hover states from distracting the remote layout */
+          background-color: inherit !important;
+          color: inherit !important;
+          transform: none !important;
+          box-shadow: none !important;
+        }
+      `;
+      document.head.appendChild(style);
+      return () => {
+        const existing = document.getElementById("tizen-cursor-occlusion-payload");
+        if (existing) existing.remove();
+      };
     } else {
-      document.body.classList.remove("cursor-hidden");
+      document.body.style.cursor = "default";
+      const existing = document.getElementById("tizen-cursor-occlusion-payload");
+      if (existing) existing.remove();
     }
   }, [cursorHidden]);
 
-  // Handle Fullscreen events
+  // Handle direct spatial keydown events representing actual TV controller hardware
   useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent browser default scroll behaviors for navigation keys (essential for Smart TV layouts)
+      const keysToBlock = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "Enter"];
+      if (keysToBlock.includes(e.key)) {
+        e.preventDefault();
+      }
+
+      setLastKeyPressed(`${e.key === " " ? "Space" : e.key} (کد دکمه: ${e.keyCode})`);
+
+      switch (e.keyCode) {
+        // UP Navigation (ArrowUp / Tizen Remote Up)
+        case 38:
+        // LEFT Navigation (ArrowLeft / Tizen Remote Left)
+        case 37:
+          setFocusedIndex(0); // Focus upper button
+          break;
+
+        // DOWN Navigation (ArrowDown / Tizen Remote Down)
+        case 40:
+        // RIGHT Navigation (ArrowRight / Tizen Remote Right)
+        case 39:
+          setFocusedIndex(1); // Focus lower button
+          break;
+
+        // Space/Enter (OK Key on Smart TV Remote)
+        case 13:
+        case 32:
+          executeActiveOption(focusedIndex);
+          break;
+
+        // Tizen Back Button (10009) / Keyboard Backspace (8) / Escape (27)
+        case 10009:
+        case 8:
+        case 27:
+          setLastKeyPressed("کلید بازگشت تلویزیون (Tizen Return/Back Key - صادر شده)");
+          break;
+
+        default:
+          break;
+      }
     };
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, []);
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [focusedIndex]);
+
+  // Execute the active option selected via remote OK/Enter button
+  const executeActiveOption = (index: number) => {
+    if (index === 0) {
+      toggleFullscreen();
+    } else if (index === 1) {
+      setCursorHidden(prev => !prev);
+    }
+  };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(err => {
-        console.warn("Fullscreen request failed:", err);
+        console.warn("فعال‌سازی تمام‌صفحه با مشکل روبرو شد:", err);
       });
     } else {
       document.exitFullscreen().catch(err => {
-        console.warn("Fullscreen exit failed:", err);
+        console.warn("خروج از حالت تمام‌صفحه با مشکل روبرو شد:", err);
       });
     }
   };
 
-  // Kick off quick query search from recommendation shortcuts
-  const handleShortcutQueryTrigger = (query: string) => {
-    setDirectQuery(query);
-    setActivePage("assistant");
-  };
-
   return (
-    <div className="flex h-screen w-screen bg-[#0F0F0F] text-[#F1F1F1] overflow-hidden relative font-sans">
+    <div className="flex h-screen w-screen bg-[#060606] text-white p-6 md:p-12 overflow-hidden relative font-sans flex-col justify-between select-none">
       
-      {/* Standalone Fullscreen Prompt Banner if not activated inside standalone browser */}
-      {!isFullscreen && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-[#1A1A1A] text-[11px] font-bold font-mono px-4 py-2 rounded-full border border-white/10 shadow-xl shadow-black/80 backdrop-blur-md flex items-center gap-2 max-sm:hidden animate-bounce">
-          <Maximize2 className="w-3.5 h-3.5 text-white animate-pulse" />
-          <span>F11 key or Settings &rarr; Fullscreen for authentic border-free TV view</span>
+      {/* Upper Panel - Connection & Hardware Status */}
+      <header className="flex justify-between items-center bg-[#0F0F0F] border border-white/5 p-5 rounded-3xl">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center border border-amber-500/20">
+            <Tv className="w-6 h-6 text-amber-500" />
+          </div>
+          <div className="flex flex-col text-right">
+            <h1 className="text-md font-bold text-white tracking-wide">سامانه ناوبری فضایی ریموت کنترل تایزن (نسخه آزمایشی خالص)</h1>
+            <p className="text-[11px] text-white/40">سخت‌افزار ریموت فیزیکی و کلیدهای ناوبری دو بعدی مستقیم متصل هستند</p>
+          </div>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          <div className="text-[10px] uppercase font-mono font-bold text-[#2ECC71] bg-[#2ECC71]/10 px-3 py-1.5 rounded-xl border border-[#2ECC71]/20 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#2ECC71] animate-ping" />
+            <span>اتصال مستقیم ریموت برقرار است</span>
+          </div>
+        </div>
+      </header>
 
-      {/* Main Framework: Sidebar + Core View Pane */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Structural Layout */}
+      <main className="flex-1 flex flex-col md:flex-row gap-6 my-6 overflow-hidden">
         
-        {/* Spatial Focus Sidebar */}
-        <Sidebar
-          activePage={activePage}
-          currentFocusId={currentFocusId}
-          setFocusedId={setFocusedId}
-          onNavigate={setActivePage}
-        />
-
-        {/* Central Content View */}
-        <main className="flex-1 flex flex-col p-8 bg-[#0F0F0F] border-r border-white/5 overflow-hidden relative">
+        {/* Left Section: Target test buttons with NO HOVER side-effects */}
+        <section className="flex-1 flex flex-col justify-center items-center gap-5 bg-[#0A0A0A] border border-white/5 rounded-3xl p-8 relative">
           
-          {/* Active Router views */}
-          {activePage === "home" && (
-            <HomeView
-              currentFocusId={currentFocusId}
-              setFocusedId={setFocusedId}
-              onSelectVideo={(video) => {
-                setActiveVideo(video);
-                setVideoPlayerOpen(true);
-                setFocusedId("player-close-btn");
-              }}
-              onQuickQuery={handleShortcutQueryTrigger}
-              registeredItems={viewRegisteredItems}
-              setRegisteredItems={setViewRegisteredItems}
-            />
-          )}
+          <div className="absolute top-4 right-4 flex items-center gap-1.5 text-[10px] text-white/20 font-mono">
+            <Shield className="w-3.5 h-3.5" />
+            <span>TIZEN PRIMARY SCREEN CONTROL</span>
+          </div>
 
-          {activePage === "assistant" && (
-            <AssistantView
-              currentFocusId={currentFocusId}
-              setFocusedId={setFocusedId}
-              onSelectVideo={(video) => {
-                setActiveVideo(video);
-                setVideoPlayerOpen(true);
-                setFocusedId("player-close-btn");
-              }}
-              registeredItems={viewRegisteredItems}
-              setRegisteredItems={setViewRegisteredItems}
-              directSearchQuery={directQuery}
-              clearDirectQuery={() => setDirectQuery(undefined)}
-            />
-          )}
+          <div className="text-center mb-4 max-w-md">
+            <h2 className="text-sm font-bold text-white/80 leading-relaxed mb-1">
+              کنترل با دکمه‌های جهتی ریموت (بالا/پایین/چپ/راست) و دکمه تایید (OK)
+            </h2>
+            <p className="text-[11px] text-white/40 leading-relaxed">
+              رویدادهای هاور ماوس به طور کامل لغو شده‌اند تا شبیه‌سازی رخ ندهد و تمرکز مطلق بر روی کلیدهای فیزیکی باشد.
+            </p>
+          </div>
 
-          {activePage === "youtube" && (
-            <YoutubeView
-              currentFocusId={currentFocusId}
-              setFocusedId={setFocusedId}
-              onSelectVideo={(video) => {
-                setActiveVideo(video);
-                setVideoPlayerOpen(true);
-                setFocusedId("player-close-btn");
-              }}
-              registeredItems={viewRegisteredItems}
-              setRegisteredItems={setViewRegisteredItems}
-            />
-          )}
-
-          {activePage === "news" && (
-            <NewsView
-              currentFocusId={currentFocusId}
-              setFocusedId={setFocusedId}
-              registeredItems={viewRegisteredItems}
-              setRegisteredItems={setViewRegisteredItems}
-            />
-          )}
-
-          {activePage === "settings" && (
-            <SettingsView
-              currentFocusId={currentFocusId}
-              setFocusedId={setFocusedId}
-              cursorHidden={cursorHidden}
-              setCursorHidden={setCursorHidden}
-              showVirtualRemote={showVirtualRemote}
-              setShowVirtualRemote={setShowVirtualRemote}
-              registeredItems={viewRegisteredItems}
-              setRegisteredItems={setViewRegisteredItems}
-              isFullscreen={isFullscreen}
-              toggleFullscreen={toggleFullscreen}
-            />
-          )}
-        </main>
-      </div>
-
-      {/* Embedded 10-foot Landscape UI Media player lightbox */}
-      {videoPlayerOpen && activeVideo && (
-        <div className="absolute inset-0 z-50 bg-[#0F0F0F] flex flex-col justify-between p-6 animate-fade-in animate-duration-200">
-          
-          {/* Close Panel Header */}
-          <div className="flex justify-between items-center bg-[#1A1A1A] p-4 rounded-2xl border border-white/5">
-            <div className="flex items-center gap-3">
-              <Youtube className="w-5 h-5 text-white/80 animate-pulse animate-duration-1000" />
+          {/* Button 1: Fullscreen */}
+          <button
+            id="tizen-btn-fullscreen"
+            onClick={() => {
+              setFocusedIndex(0);
+              executeActiveOption(0);
+            }}
+            className={`w-full max-w-md py-6 px-7 rounded-2xl border text-right transition-all duration-200 outline-none flex items-center justify-between ${
+              focusedIndex === 0
+                ? "bg-amber-500 text-black border-amber-400 scale-[1.03] shadow-[0_0_35px_rgba(245,158,11,0.35)]"
+                : "bg-[#111111] text-white/70 border-white/5"
+            }`}
+          >
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold ${
+                focusedIndex === 0 ? "bg-black text-white" : "bg-white/5 text-white/80"
+              }`}>
+                <Maximize2 className="w-5.5 h-5.5" />
+              </div>
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-white font-display">{activeVideo.title}</span>
-                <span className="text-[9px] text-[#A0A0A0] font-mono mt-0.5">{activeVideo.channel} &bull; Now streaming in Tizen Web Player</span>
+                <span className="text-xs font-bold font-display">۱. دکمه فعالسازی تمام‌صفحه (Fullscreen)</span>
+                <span className={`text-[10px] mt-1 ${focusedIndex === 0 ? "text-black/60" : "text-white/40"}`}>
+                  با فشرده شدن دکمه OK، قاب مرورگر و سربرگ‌های زاید ناپدید می‌شوند.
+                </span>
               </div>
             </div>
             
-            <button
-              id="player-close-btn"
-              onClick={closePlayer}
-              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 outline-none flex items-center gap-2 border font-display ${
-                currentFocusId === "player-close-btn"
-                  ? "bg-white border-white text-black scale-102 shadow-[0_0_20px_rgba(255,255,255,0.15)]"
-                  : "bg-white/5 border-white/5 text-white/80 hover:bg-white/10"
-              }`}
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>برگشت / Close Media</span>
-            </button>
-          </div>
+            {focusedIndex === 0 && (
+              <span className="bg-black text-white text-[9px] font-mono py-1 px-2.5 rounded-full font-extrabold">
+                فوکوس ریموت
+              </span>
+            )}
+          </button>
 
-          {/* IFrame embedding core YouTube feed */}
-          <div className="flex-1 my-4 bg-black rounded-3xl overflow-hidden relative border border-white/5 shadow-2xl shadow-black">
-            <iframe
-              src={`https://www.youtube.com/embed/${activeVideo.youtubeId}?autoplay=1&enablejsapi=1&rel=0&modestbranding=1&controls=1`}
-              title={activeVideo.title}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              referrerPolicy="no-referrer"
-              className="w-full h-full object-cover border-none"
-            />
-          </div>
-
-          <div className="flex justify-between text-[9px] text-white/40 font-mono px-3">
-            <span>Tizen Standalone PWA Media Player Layer v1.0</span>
-            <span>PRESS BACKSPACE KEY TO CLOSE MEDIA AND RETURN TO PORTAL</span>
-          </div>
-        </div>
-      )}
-
-      {/* Floating On-Screen Virtual Remote Control Overlay for quick PC testing */}
-      {showVirtualRemote && (
-        <div className="fixed bottom-6 right-6 z-40 bg-[#1A1A1A]/95 p-4 rounded-3xl border border-white/5 backdrop-blur-md flex flex-col gap-3 shadow-2xl shadow-black/80 select-none max-lg:hidden w-44">
-          <div className="flex items-center justify-between border-b border-white/5 pb-2">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-white/80 font-display">
-              <Tv className="w-3.5 h-3.5 text-white" />
-              <span>Tizen Remote</span>
+          {/* Button 2: Hide default OS mouse pointer */}
+          <button
+            id="tizen-btn-cursor"
+            onClick={() => {
+              setFocusedIndex(1);
+              executeActiveOption(1);
+            }}
+            className={`w-full max-w-md py-6 px-7 rounded-2xl border text-right transition-all duration-200 outline-none flex items-center justify-between ${
+              focusedIndex === 1
+                ? "bg-amber-500 text-black border-amber-400 scale-[1.03] shadow-[0_0_35px_rgba(245,158,11,0.35)]"
+                : "bg-[#111111] text-white/70 border-white/5"
+            }`}
+          >
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold ${
+                focusedIndex === 1 ? "bg-black text-white" : "bg-white/5 text-white/80"
+              }`}>
+                {cursorHidden ? <EyeOff className="w-5.5 h-5.5" /> : <Eye className="w-5.5 h-5.5" />}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold font-display">۲. پنهان‌سازی دایمی نشانگر ماوس</span>
+                <span className={`text-[10px] mt-1 ${focusedIndex === 1 ? "text-black/60" : "text-white/40"}`}>
+                  با فعال کردن این گزینه، نشانگر ماوس پیش‌فرض سیستم کاملاً محو می‌شود.
+                </span>
+              </div>
             </div>
-            <button
-              onClick={() => setShowVirtualRemote(false)}
-              className="text-[9px] text-white/40 hover:text-white/60 bg-black/65 py-0.5 px-1.5 rounded"
-            >
-              Hide
-            </button>
-          </div>
 
-          {/* 5-Way Navigation Pad */}
-          <div className="flex flex-col items-center py-2">
-            
-            {/* UP button */}
-            <button
-               onClick={() => moveFocus("UP")}
-              className="w-10 h-10 rounded-full bg-black border border-white/10 flex items-center justify-center hover:bg-white/5 active:scale-95 text-white/80 pointer-events-auto"
-            >
-              <ChevronUp className="w-4 h-4" />
-            </button>
+            {focusedIndex === 1 && (
+              <span className="bg-black text-white text-[9px] font-mono py-1 px-2.5 rounded-full font-extrabold">
+                فوکوس ریموت
+              </span>
+            )}
+          </button>
 
-            {/* LEFT / OK / RIGHT row */}
-            <div className="flex items-center gap-4 my-2">
-              <button
-                onClick={() => moveFocus("LEFT")}
-                className="w-10 h-10 rounded-full bg-black border border-white/10 flex items-center justify-center hover:bg-white/5 active:scale-95 text-white/80 pointer-events-auto"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+        </section>
+
+        {/* Right Section: Interactive HUD & Real-time Diagnosis */}
+        <section className="w-full md:w-96 flex flex-col gap-4">
+          
+          <div className="bg-[#0F0F0F] border border-white/5 p-6 rounded-3xl text-right flex flex-col gap-4">
+            <div className="flex items-center gap-2 border-b border-white/5 pb-3">
+              <Key className="w-5 h-5 text-amber-500" />
+              <span className="text-xs font-bold font-display">نشانگر فرامین و عیب‌یاب زنده</span>
+            </div>
+
+            <div className="flex flex-col gap-3.5 text-xs font-mono">
+              <div className="flex justify-between items-center bg-black/40 p-2.5 rounded-xl border border-white/5">
+                <span className="text-white font-bold">{focusedIndex === 0 ? "کلید تمام‌صفحه (۱)" : "کلید ماوس (۲)"}</span>
+                <span className="text-white/40">فوکوس فعال فعلی:</span>
+              </div>
               
-              {/* OK / ENTER */}
-              <button
-                onClick={triggerEnter}
-                className="w-12 h-12 rounded-full bg-white border border-white flex items-center justify-center text-black shadow-lg shadow-white/10 hover:bg-white/90 active:scale-95 pointer-events-auto text-xs font-bold font-display"
-              >
-                OK
-              </button>
+              <div className="flex justify-between items-center bg-black/40 p-2.5 rounded-xl border border-white/5">
+                <span className={`text-[11px] font-bold ${isFullscreen ? "text-[#2ECC71]" : "text-amber-500"}`}>
+                  {isFullscreen ? "فعال (Tizen Fullscreen)" : "غیر فعال"}
+                </span>
+                <span className="text-white/40">حالت تمام‌صفحه:</span>
+              </div>
 
-              <button
-                onClick={() => moveFocus("RIGHT")}
-                className="w-10 h-10 rounded-full bg-black border border-white/10 flex items-center justify-center hover:bg-white/5 active:scale-95 text-white/80 pointer-events-auto"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+              <div className="flex justify-between items-center bg-black/40 p-2.5 rounded-xl border border-white/5">
+                <span className={`text-[11px] font-bold ${cursorHidden ? "text-red-400" : "text-[#2ECC71]"}`}>
+                  {cursorHidden ? "کاملاً محو و مسدود" : "نمایان معمولی"}
+                </span>
+                <span className="text-white/40">نشانگر ماوس فیزیکی:</span>
+              </div>
 
-            {/* DOWN button */}
-            <button
-              onClick={() => moveFocus("DOWN")}
-              className="w-10 h-10 rounded-full bg-black border border-white/10 flex items-center justify-center hover:bg-white/5 active:scale-95 text-white/80 pointer-events-auto"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Dedicated Back key simulated */}
-          <div className="grid grid-cols-2 gap-2 mt-1">
-            <button
-              onClick={triggerBack}
-              className="py-2 rounded-xl bg-black border border-white/10 text-[10px] text-center font-bold text-white/80 hover:bg-white/5 transition-all duration-150 flex items-center justify-center gap-1.5"
-            >
-              <ArrowLeft className="w-3 h-3" /> Back
-            </button>
-            <div className="bg-black/30 border border-white/10 p-1.5 rounded-xl flex flex-col justify-center items-center text-[8px] text-white/40 text-center uppercase tracking-wider">
-              <span>Keyboard</span>
-              <span className="font-bold text-[9px] text-white/60">Arrows</span>
+              <div className="flex flex-col gap-2 border-t border-white/5 pt-3.5 mt-1">
+                <span className="text-[10px] text-white/30">آخرین کلید فیزیکی ردیابی شده از کنترل:</span>
+                <div className="text-center text-[11px] bg-[#141414] py-3 px-4 rounded-xl border border-amber-500/20 text-amber-400 font-extrabold font-mono leading-relaxed">
+                  {lastKeyPressed}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+
+          <div className="bg-[#0A0A0A] border border-white/5 p-5 rounded-3xl flex flex-col gap-3 text-right">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-white/30 tracking-wide">
+              <HelpCircle className="w-4 h-4 text-white/30" />
+              <span>راهنمایی ناوبری ۱۰ فوت تلویزیون</span>
+            </div>
+            <p className="text-[11px] text-white/40 leading-relaxed">
+              کلیدهای بالا و پایین (یا چپ و راست) مستقیماً فوکوس را بازنشانی کرده و به دکمه مربوطه هدایت می‌کنند. دکمه Enter ریموت یا Space بار فیزیکی نقش دکمه کلیک تایید را دارد.
+            </p>
+          </div>
+
+        </section>
+
+      </main>
+
+      {/* Footer System Status Panel */}
+      <footer className="bg-[#0F0F0F] border border-white/5 px-6 py-4 rounded-2xl flex flex-col md:flex-row justify-between items-center text-xs text-white/40 gap-2">
+        <span className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-amber-500" />
+          <span>پوسته آزمایش مستقیم کنترلر Tizen Web Engine v2.0 - ۱۰۰٪ مستقل از شبیه‌سازی دکوری</span>
+        </span>
+        <span className="font-mono text-[10px] text-white/30">
+          Samsung Smart TV Remote Control Mapping: keycodes 37, 38, 39, 40, 13, 10009 active
+        </span>
+      </footer>
+
     </div>
   );
 }
